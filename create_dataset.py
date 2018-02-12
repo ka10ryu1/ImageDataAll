@@ -41,7 +41,8 @@ def readImages(folder, channel, ext):
     imgs = [cv2.imread(name, ch) for name in img_path]
     # 画像を分割する（正解データに相当）
     return IMG.split(
-        IMG.rotate(imgs), args.img_size,
+        #IMG.rotate(imgs), args.img_size,
+        imgs, args.img_size,
         args.round, flg=cv2.BORDER_REFLECT_101
     )
 
