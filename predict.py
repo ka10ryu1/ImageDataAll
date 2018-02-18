@@ -15,9 +15,9 @@ import chainer
 import chainer.links as L
 from chainer.cuda import to_cpu
 
-from Lib.network2 import JC
-import Lib.imgfunc as IMG
-import Tools.func as F
+from network2 import JC
+import imgfunc as IMG
+import func as F
 
 
 def command():
@@ -30,8 +30,6 @@ def command():
                         help='使用する画像のパス')
     parser.add_argument('--img_size', '-s', type=int, default=32,
                         help='生成される画像サイズ [default: 32 pixel]')
-    parser.add_argument('--quality', '-q', type=int, default=5,
-                        help='画像の圧縮率 [default: 5]')
     parser.add_argument('--batch', '-b', type=int, default=100,
                         help='ミニバッチサイズ [default: 100]')
     parser.add_argument('--gpu', '-g', type=int, default=-1,
@@ -80,18 +78,8 @@ def predict(model, args, img, ch, val):
     """
 
     org_size = img.shape
-    # 入力画像を圧縮して劣化させる
-    comp = IMG.encodeDecode([img], IMG.getCh(ch), args.quality)
-    # 比較のため圧縮画像を保存する
-    if(val >= 0):
-        cv2.imwrite(
-            F.getFilePath(args.out_path, 'comp-' +
-                          str(val * 10).zfill(3), '.jpg'),
-            comp[0]
-        )
-
     # 入力画像を分割する
-    comp, size = IMG.split(comp, args.img_size)
+    comp, size = IMG.split([img], args.img_size)
     imgs = []
 
     st = time.time()
@@ -101,7 +89,7 @@ def predict(model, args, img, ch, val):
         x = IMG.imgs2arr(comp[i:i + args.batch], gpu=args.gpu)
         y = model.predictor(x)
         y = to_cpu(y.array)
-        y = IMG.arr2imgs(y, ch, args.img_size * 2)
+        y = IMG.arr2imgs(y, 1, args.img_size * 2)
         imgs.extend(y)
 
     print('exec time: {0:.2f}[s]'.format(time.time() - st))

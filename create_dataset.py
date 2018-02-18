@@ -15,14 +15,14 @@ import func as F
 
 def command():
     parser = argparse.ArgumentParser(description=help)
-    parser.add_argument('color',
-                        help='使用する入力画像のあるフォルダ')
-    parser.add_argument('mono',
-                        help='使用する正解画像のあるフォルダ')
+    parser.add_argument('color',   help='使用する入力画像')
+    parser.add_argument('duotone', help='使用する正解画像')
     parser.add_argument('--img_size', '-s', type=int, default=32,
                         help='生成される画像サイズ（default: 32 pixel）')
     parser.add_argument('--round', '-r', type=int, default=100,
                         help='切り捨てる数（default: 100）')
+    parser.add_argument('--channel', '-c', type=int, default=1,
+                        help='入力画像のチャンネル数（default: 1）')
     parser.add_argument('--train_per_all', '-t', type=float, default=0.9,
                         help='画像数に対する学習用画像の割合（default: 0.9）')
     parser.add_argument('-o', '--out_path', default='./result/',
@@ -30,29 +30,32 @@ def command():
     return parser.parse_args()
 
 
-def readImages(folder, channel, ext):
-    # OpenCV形式で画像を読み込むために
-    # チャンネル数をOpenCVのフラグ形式に変換する
-    ch = IMG.getCh(channel)
-    # OpenCV形式で画像をリストで読み込む
-    print('read images...')
-    img_path = [i.as_posix() for i in list(Path(folder).glob('*' + ext))]
-    img_path.sort()
-    imgs = [cv2.imread(name, ch) for name in img_path]
-    # 画像を分割する（正解データに相当）
-    return IMG.split(
-        #IMG.rotate(imgs), args.img_size,
-        imgs, args.img_size,
-        args.round, flg=cv2.BORDER_REFLECT_101
-    )
+# def readImages(folder, channel, ext):
+#     # OpenCV形式で画像を読み込むために
+#     # チャンネル数をOpenCVのフラグ形式に変換する
+#     ch = IMG.getCh(channel)
+#     # OpenCV形式で画像をリストで読み込む
+#     print('read images...')
+#     img_path = [i.as_posix() for i in list(Path(folder).glob('*' + ext))]
+#     img_path.sort()
+#     imgs = [cv2.imread(name, ch) for name in img_path]
+#     # 画像を分割する（正解データに相当）
+#     return IMG.split(
+#         IMG.rotate(imgs), args.img_size,
+#         #imgs, args.img_size,
+#         args.round, flg=cv2.BORDER_REFLECT_101
+#     )
 
 
 def main(args):
 
     # 入力のカラー画像を読み込む
-    x = readImages(args.color, 3, '.JPG')
+    x = cv2.imread(args.color, IMG.getCh(3))
     # 正解のモノクロ画像を読み込む
-    y = readImages(args.mono, 1, '.png')
+    y = cv2.imread(args.duotone, IMG.getCh(1))
+
+    x, _ = IMG.split(IMG.rotate([x]), args.img_size, args.round)
+    y, _ = IMG.split(IMG.rotate([y]), args.img_size, args.round)
 
     # 画像の並び順をシャッフルするための配列を作成する
     # colorとmonoの対応を崩さないようにシャッフルしなければならない
@@ -60,6 +63,7 @@ def main(args):
     print('shuffle images...')
     shuffle = np.random.permutation(range(len(x)))
     train_size = int(len(x) * args.train_per_all)
+    print(train_size, len(x))  # , x.shape)
     train_x = x[shuffle[:train_size]]
     train_y = y[shuffle[:train_size]]
     test_x = x[shuffle[train_size:]]

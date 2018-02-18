@@ -93,6 +93,7 @@ def split(imgs, size, round_num=-1, flg=cv2.BORDER_REPLICATE):
 
     # 画像の分割数を計算する
     split = [(getSplit(i, 0, size), getSplit(i, 1, size)) for i in imgs]
+    size = split[0]
 
     # 画像を分割する
     out_imgs = []
@@ -110,9 +111,9 @@ def split(imgs, size, round_num=-1, flg=cv2.BORDER_REPLICATE):
     # predict.pyなどで分割画像を復元したくなるので縦横の分割数も返す
     if(round_num > 0):
         round_len = len(out_imgs) // round_num * round_num
-        return np.array(out_imgs[:round_len])
+        return np.array(out_imgs[:round_len]), size
     else:
-        return np.array(out_imgs)
+        return np.array(out_imgs), size
 
 
 def rotate(imgs):
