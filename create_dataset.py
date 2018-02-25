@@ -21,8 +21,8 @@ def command():
                         help='生成される画像サイズ（default: 32 pixel）')
     parser.add_argument('--round', '-r', type=int, default=100,
                         help='切り捨てる数（default: 100）')
-    parser.add_argument('--channel', '-c', type=int, default=1,
-                        help='入力画像のチャンネル数（default: 1）')
+    # parser.add_argument('--channel', '-c', type=int, default=1,
+    #                     help='入力画像のチャンネル数（default: 1）')
     parser.add_argument('--train_per_all', '-t', type=float, default=0.9,
                         help='画像数に対する学習用画像の割合（default: 0.9）')
     parser.add_argument('-o', '--out_path', default='./result/',
@@ -30,21 +30,10 @@ def command():
     return parser.parse_args()
 
 
-# def readImages(folder, channel, ext):
-#     # OpenCV形式で画像を読み込むために
-#     # チャンネル数をOpenCVのフラグ形式に変換する
-#     ch = IMG.getCh(channel)
-#     # OpenCV形式で画像をリストで読み込む
-#     print('read images...')
-#     img_path = [i.as_posix() for i in list(Path(folder).glob('*' + ext))]
-#     img_path.sort()
-#     imgs = [cv2.imread(name, ch) for name in img_path]
-#     # 画像を分割する（正解データに相当）
-#     return IMG.split(
-#         IMG.rotate(imgs), args.img_size,
-#         #imgs, args.img_size,
-#         args.round, flg=cv2.BORDER_REFLECT_101
-#     )
+def saveNPZ(x, y, name, folder, size):
+    size_str = '_' + str(size).zfill(2) + 'x' + str(size).zfill(2)
+    num_str = '_' + str(x.shape[0]).zfill(6)
+    np.savez(F.getFilePath(folder, name + size_str + num_str), x=x, y=y)
 
 
 def main(args):
@@ -64,25 +53,18 @@ def main(args):
     shuffle = np.random.permutation(range(len(x)))
     train_size = int(len(x) * args.train_per_all)
     print(train_size, len(x))  # , x.shape)
-    train_x = x[shuffle[:train_size]]
-    train_y = y[shuffle[:train_size]]
-    test_x = x[shuffle[train_size:]]
-    test_y = y[shuffle[train_size:]]
-    print(
-        'train x/y:{0}/{1}'.format(train_x.shape, train_y.shape))
+    train_x = IMG.imgs2arr(x[shuffle[:train_size]], dtype=np.float16)
+    train_y = IMG.imgs2arr(y[shuffle[:train_size]], dtype=np.float16)
+    test_x = IMG.imgs2arr(x[shuffle[train_size:]], dtype=np.float16)
+    test_y = IMG.imgs2arr(y[shuffle[train_size:]], dtype=np.float16)
+    print('train x/y:{0}/{1}'.format(train_x.shape, train_y.shape))
     print('test  x/y:{0}/{1}'.format(test_x.shape, test_y.shape))
 
     # 生成したデータをnpz形式でデータセットとして保存する
     # ここで作成したデータの中身を確認する場合はnpz2jpg.pyを使用するとよい
     print('save npz...')
-    size_str = '_' + str(args.img_size).zfill(2) + 'x' + \
-        str(args.img_size).zfill(2)
-    num_str = '_' + str(train_x.shape[0]).zfill(6)
-    np.savez(F.getFilePath(args.out_path, 'train' + size_str + num_str),
-             x=train_x, y=train_y)
-    num_str = '_' + str(test_x.shape[0]).zfill(6)
-    np.savez(F.getFilePath(args.out_path, 'test' + size_str + num_str),
-             x=test_x, y=test_y)
+    saveNPZ(train_x, train_y, 'train', args.out_path, args.img_size)
+    saveNPZ(test_x, test_y, 'test', args.out_path, args.img_size)
 
 
 if __name__ == '__main__':
