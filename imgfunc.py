@@ -17,6 +17,7 @@ except ImportError:
 import chainer.functions as F
 import chainer.optimizers as O
 
+[sys.path.append(d) for d in ['./Tools/', '../Tools/'] if os.path.isdir(d)]
 from func import fileFuncLine
 
 
@@ -26,13 +27,6 @@ def getCh(ch):
     [in]  ch:入力されたチャンネル数 (type=int or np.shape)
     [out] OpenCVの形式
     """
-
-    # np.shapeが代入された場合、shapeの数でチャンネル数を判断する
-    if isinstance(ch, list):
-        if len(ch) == 3:
-            ch = ch[2]
-        else:
-            ch = 1
 
     if(ch == 1):
         return cv2.IMREAD_GRAYSCALE
@@ -81,24 +75,17 @@ def split(imgs, size, round_num=-1, flg=cv2.BORDER_REPLICATE):
     # 画像を分割する際に端が切れてしまうのを防ぐために余白を追加する
     imgs = [cv2.copyMakeBorder(img, 0, size, 0, size, flg)
             for img in imgs]
-
-    def getSize(i, num, size):
-        return i.shape[num] // size * size
-
     # 画像を分割しやすいように画像サイズを変更する
-    imgs = [i[:getSize(i, 0, size), :getSize(i, 1, size)] for i in imgs]
-
-    def getSplit(i, num, size):
-        return i.shape[num] // size
-
+    v_size = imgs[0].shape[0] // size * size
+    h_size = imgs[0].shape[1] // size * size
+    imgs = [i[:v_size, :h_size] for i in imgs]
     # 画像の分割数を計算する
-    split = [(getSplit(i, 0, size), getSplit(i, 1, size)) for i in imgs]
-    size = split[0]
-
+    v_split = imgs[0].shape[0] // size
+    h_split = imgs[0].shape[1] // size
     # 画像を分割する
     out_imgs = []
-    [[out_imgs.extend(np.vsplit(h_img, s[0]))
-      for h_img in np.hsplit(img, s[1])] for img, s in zip(imgs, split)]
+    [[out_imgs.extend(np.vsplit(h_img, v_split))
+      for h_img in np.hsplit(img, h_split)] for img in imgs]
 
     # 切り捨てたい数よりも画像数が少ないと0枚になってしまうので注意
     if(round_num > len(out_imgs)):
@@ -111,12 +98,12 @@ def split(imgs, size, round_num=-1, flg=cv2.BORDER_REPLICATE):
     # predict.pyなどで分割画像を復元したくなるので縦横の分割数も返す
     if(round_num > 0):
         round_len = len(out_imgs) // round_num * round_num
-        return np.array(out_imgs[:round_len]), size
+        return np.array(out_imgs[:round_len]), (v_split, h_split)
     else:
-        return np.array(out_imgs), size
+        return np.array(out_imgs), (v_split, h_split)
 
 
-def rotate(imgs):
+def rotate(imgs, num=2):
     """
     画像を回転させてデータ数を水増しする
     [in]  imgs:     入力画像リスト
@@ -125,20 +112,50 @@ def rotate(imgs):
 
     out_imgs = imgs.copy()
     [out_imgs.append(cv2.flip(i, 0)) for i in imgs]
-    [out_imgs.append(cv2.flip(i, 1)) for i in imgs]
-    #[out_imgs.append(cv2.flip(cv2.flip(i, 1), 0)) for i in imgs]
+    if(num > 1):
+        [out_imgs.append(cv2.flip(i, 1)) for i in imgs]
+
+    if(num > 2):
+        [out_imgs.append(cv2.flip(cv2.flip(i, 1), 0)) for i in imgs]
+
     return out_imgs
 
 
 def whiteCheck(imgs, val=245):
+    """
+    画像リストのうち、ほとんど白い画像を除去する
+    [in] imgs: 判定する画像リスト
+    [in] val:  除去するしきい値
+    [out] ほとんど白い画像を除去した画像リスト
+    """
+
     return [i for i in imgs
             if(val > np.sum(i) // (i.shape[0] * i.shape[1]))]
 
 
 def size2x(imgs, flg=cv2.INTER_NEAREST):
+    """
+    画像のサイズを2倍にする
+    [in] imgs: 2倍にする画像リスト
+    [in] flg:  2倍にする時のフラグ
+    [out] 2倍にされた画像リスト
+    """
+
     w, h = imgs[0].shape[:2]
     size = (w * 2, h * 2)
     return [cv2.resize(i, size, flg) for i in imgs]
+
+
+def arr2x(arr, flg=cv2.INTER_NEAREST):
+    """
+    行列を画像に変換し、サイズを2倍にする
+    [in] arr: 2倍にする行列
+    [in] flg:  2倍にする時のフラグ
+    [out] 2倍にされた行列
+    """
+
+    imgs = arr2imgs(arr)
+    return imgs2arr(size2x(imgs))
 
 
 def imgs2arr(imgs, norm=255, dtype=np.float32, gpu=-1):
@@ -163,7 +180,7 @@ def imgs2arr(imgs, norm=255, dtype=np.float32, gpu=-1):
         return np.array(imgs, dtype=dtype).reshape((-1, ch, w, h)) / norm
 
 
-def arr2imgs(arr, ch, size, norm=255, dtype=np.uint8):
+def arr2imgs(arr, norm=255, dtype=np.uint8):
     """
     Chainerの出力をOpenCVで可視化するために変換する
     [in]  arr:   Chainerから出力された行列
@@ -174,15 +191,24 @@ def arr2imgs(arr, ch, size, norm=255, dtype=np.uint8):
     [out] OpenCV形式の画像に変換された行列
     """
 
+    ch, size = arr.shape[1], arr.shape[2]
     y = np.array(arr).reshape((-1, size, size, ch)) * 255
     return np.array(y, dtype=np.uint8)
 
 
 def getLossfun(lossfun_str):
+    """
+    入力文字列から損失関数を推定する
+    """
+
     if(lossfun_str.lower() == 'mse'):
         lossfun = F.mean_squared_error
     elif(lossfun_str.lower() == 'mae'):
         lossfun = F.mean_absolute_error
+    elif(lossfun_str.lower() == 'ber'):
+        lossfun = F.bernoulli_nll
+    elif(lossfun_str.lower() == 'gauss_kl'):
+        lossfun = F.gaussian_kl_divergence
     else:
         lossfun = F.mean_squared_error
         print('\n[Warning] {0}\n\t{1}->{2}\n'.format(
@@ -193,7 +219,15 @@ def getLossfun(lossfun_str):
     return lossfun
 
 
+def F_None(x):
+    return x
+
+
 def getActfun(actfun_str):
+    """
+    入力文字列から活性化関数を推定する
+    """
+
     if(actfun_str.lower() == 'relu'):
         actfun = F.relu
     elif(actfun_str.lower() == 'elu'):
@@ -207,9 +241,11 @@ def getActfun(actfun_str):
     elif(actfun_str.lower() == 'h_sigmoid'):
         actfun = F.hard_sigmoid
     elif(actfun_str.lower() == 'tanh'):
-        actfun = F.hard_sigmoid
+        actfun = F.tanh
     elif(actfun_str.lower() == 's_plus'):
         actfun = F.softplus
+    elif(actfun_str.lower() == 'none'):
+        actfun = F_None
     else:
         actfun = F.relu
         print('\n[Warning] {0}\n\t{1}->{2}\n'.format(
@@ -221,6 +257,10 @@ def getActfun(actfun_str):
 
 
 def getOptimizer(opt_str):
+    """
+    入力文字列からオプティマイザを推定する
+    """
+
     if(opt_str.lower() == 'adam'):
         opt = O.Adam()
     elif(opt_str.lower() == 'ada_d'):
