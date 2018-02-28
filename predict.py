@@ -15,8 +15,7 @@ import chainer
 import chainer.links as L
 from chainer.cuda import to_cpu
 
-from network2 import JC
-import imgfunc as IMG
+import Lib.imgfunc as IMG
 import func as F
 
 
@@ -30,6 +29,8 @@ def command():
                         help='使用する画像のパス')
     parser.add_argument('--img_size', '-s', type=int, default=32,
                         help='生成される画像サイズ [default: 32 pixel]')
+    parser.add_argument('--quality', '-q', type=int, default=5,
+                        help='画像の圧縮率 [default: 5]')
     parser.add_argument('--batch', '-b', type=int, default=100,
                         help='ミニバッチサイズ [default: 100]')
     parser.add_argument('--gpu', '-g', type=int, default=-1,
@@ -63,23 +64,25 @@ def getModelParam(path):
 
     af1 = IMG.getActfun(d['actfun_1'])
     af2 = IMG.getActfun(d['actfun_2'])
-    return d['unit'], d['img_ch'], d['layer'], d['shuffle_rate'], af1, af2
+    return \
+        d['network'], d['unit'], d['img_ch'], \
+        d['layer_num'], d['shuffle_rate'], af1, af2
 
 
-def predict(model, args, img, ch, val):
+def predict(model, args, org, ch, val=-1):
     """
     推論実行メイン部
     [in]  model:  推論実行に使用するモデル
     [in]  args:   実行時のオプション引数情報
-    [in]  img:    入力画像
+    [in]  org:    入力画像
     [in]  ch:     入力画像のチャンネル数
     [in]  val:    画像保存時の連番情報
     [out] img:推論実行で得られた生成画像
     """
 
-    org_size = img.shape
+    org_size = org.shape
     # 入力画像を分割する
-    comp, size = IMG.split([img], args.img_size)
+    comp, size = IMG.split([org], args.img_size)
     imgs = []
 
     st = time.time()
@@ -156,11 +159,16 @@ def checkModelType(path):
 
 def main(args):
     # jsonファイルから学習モデルのパラメータを取得する
-    unit, ch, layer, sr, af1, af2 = getModelParam(args.param)
+    net, unit, ch, layer, sr, af1, af2 = getModelParam(args.param)
     # 学習モデルの出力画像のチャンネルに応じて画像を読み込む
     ch_flg = IMG.getCh(ch)
-    imgs = [cv2.imread(name, ch_flg) for name in args.jpeg if isImage(name)]
+    org_imgs = [cv2.imread(name, ch_flg) for name in args.jpeg if isImage(name)]
     # 学習モデルを生成する
+    if net == 0:
+        from Lib.network2 import JC_UDUD as JC
+    else:
+        from Lib.network import JC_DDUU as JC
+
     model = L.Classifier(
         JC(n_unit=unit, n_out=ch, layer=layer,
            rate=sr, actfun_1=af1, actfun_2=af2)
@@ -183,10 +191,9 @@ def main(args):
 
     # 学習モデルを入力画像ごとに実行する
     with chainer.using_config('train', False):
-        imgs = [predict(model, args, img, ch, i)
-                for i, img in enumerate(imgs)]
+        imgs = [predict(model, args, img, ch, i) for i, img in enumerate(org_imgs)]
 
-    # 生成結果の表示
+    # 推論実行結果を表示する
     for i in imgs:
         cv2.imshow('test', i)
         cv2.waitKey()
