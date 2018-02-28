@@ -6,6 +6,7 @@ help = '便利機能'
 
 import os
 import inspect
+from pathlib import Path
 
 
 def argsPrint(p, bar=30):
@@ -33,6 +34,12 @@ def getFilePath(folder, name, ext=''):
         os.makedirs(folder)
 
     return os.path.join(folder, name + ext)
+
+
+def sortTimeStamp(folder_list, ext):
+    path = []
+    [path.extend(list(Path(f).glob('*'+ext))) for f in folder_list]
+    return sorted([x.as_posix() for x in path], key=os.path.getmtime)
 
 
 def fileFuncLine():

@@ -7,9 +7,8 @@ help = '画像を読み込んでデータセットを作成する'
 import cv2
 import argparse
 import numpy as np
-from pathlib import Path
 
-import imgfunc as IMG
+import Lib.imgfunc as IMG
 import func as F
 
 
