@@ -86,7 +86,6 @@ def split(imgs, size, round_num=-1, flg=cv2.BORDER_REPLICATE):
     out_imgs = []
     [[out_imgs.extend(np.vsplit(h_img, v_split))
       for h_img in np.hsplit(img, h_split)] for img in imgs]
-
     # 切り捨てたい数よりも画像数が少ないと0枚になってしまうので注意
     if(round_num > len(out_imgs)):
         print('[Error] round({0}) > split images({1})'.format(

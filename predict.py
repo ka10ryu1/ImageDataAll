@@ -29,8 +29,8 @@ def command():
                         help='使用する画像のパス')
     parser.add_argument('--img_size', '-s', type=int, default=32,
                         help='生成される画像サイズ [default: 32 pixel]')
-    parser.add_argument('--quality', '-q', type=int, default=5,
-                        help='画像の圧縮率 [default: 5]')
+    parser.add_argument('--img_rate', '-r', type=float, default=0.5,
+                        help='画像サイズの倍率 [default: 0.5]')
     parser.add_argument('--batch', '-b', type=int, default=100,
                         help='ミニバッチサイズ [default: 100]')
     parser.add_argument('--gpu', '-g', type=int, default=-1,
@@ -69,7 +69,7 @@ def getModelParam(path):
         d['layer_num'], d['shuffle_rate'], af1, af2
 
 
-def predict(model, args, org, ch, val=-1):
+def predict(model, args, org, ch, rate, val=-1):
     """
     推論実行メイン部
     [in]  model:  推論実行に使用するモデル
@@ -107,6 +107,9 @@ def predict(model, args, org, ch, val=-1):
     flg = cv2.INTER_NEAREST
     img = cv2.resize(img, half_size, flg)
     img = img[:org_size[0], :org_size[1]]
+    resize = (int(img.shape[1] * rate), int(img.shape[0] * rate))
+    img = cv2.resize(img, resize, flg)
+
     # 生成結果を保存する
     if(val >= 0):
         name = F.getFilePath(args.out_path, 'comp-' +
@@ -162,7 +165,8 @@ def main(args):
     net, unit, ch, layer, sr, af1, af2 = getModelParam(args.param)
     # 学習モデルの出力画像のチャンネルに応じて画像を読み込む
     ch_flg = IMG.getCh(ch)
-    org_imgs = [cv2.imread(name, ch_flg) for name in args.jpeg if isImage(name)]
+    org_imgs = [cv2.imread(name, ch_flg)
+                for name in args.jpeg if isImage(name)]
     # 学習モデルを生成する
     if net == 0:
         from Lib.network2 import JC_UDUD as JC
@@ -191,7 +195,8 @@ def main(args):
 
     # 学習モデルを入力画像ごとに実行する
     with chainer.using_config('train', False):
-        imgs = [predict(model, args, img, ch, i) for i, img in enumerate(org_imgs)]
+        imgs = [predict(model, args, img, ch, args.img_rate, i)
+                for i, img in enumerate(org_imgs)]
 
     # 推論実行結果を表示する
     for i in imgs:
