@@ -27,8 +27,6 @@ def command():
                         help='使用するモデルパラメータ')
     parser.add_argument('jpeg', nargs='+',
                         help='使用する画像のパス')
-    parser.add_argument('--img_size', '-s', type=int, default=32,
-                        help='生成される画像サイズ [default: 32 pixel]')
     parser.add_argument('--img_rate', '-r', type=float, default=0.5,
                         help='画像サイズの倍率 [default: 0.5]')
     parser.add_argument('--batch', '-b', type=int, default=100,
@@ -64,12 +62,14 @@ def getModelParam(path):
 
     af1 = IMG.getActfun(d['actfun_1'])
     af2 = IMG.getActfun(d['actfun_2'])
+    ch = d['shape'][0]
+    size = d['shape'][1]
     return \
-        d['network'], d['unit'], d['img_ch'], \
+        d['network'], d['unit'], ch, size, \
         d['layer_num'], d['shuffle_rate'], af1, af2
 
 
-def predict(model, args, org, ch, rate, val=-1):
+def predict(model, args, org, ch, img_size, rate, val=-1):
     """
     推論実行メイン部
     [in]  model:  推論実行に使用するモデル
@@ -80,9 +80,12 @@ def predict(model, args, org, ch, rate, val=-1):
     [out] img:推論実行で得られた生成画像
     """
 
+    resize = (int(org.shape[1] * rate), int(org.shape[0] * rate))
+    flg = cv2.INTER_NEAREST
+    org = cv2.resize(org, resize, flg)
     org_size = org.shape
     # 入力画像を分割する
-    comp, size = IMG.split([org], args.img_size)
+    comp, size = IMG.split([org], img_size)
     imgs = []
 
     st = time.time()
@@ -92,7 +95,7 @@ def predict(model, args, org, ch, rate, val=-1):
         x = IMG.imgs2arr(comp[i:i + args.batch], gpu=args.gpu)
         y = model.predictor(x)
         y = to_cpu(y.array)
-        y = IMG.arr2imgs(y, 1, args.img_size * 2)
+        y = IMG.arr2imgs(y, 1, img_size * 2)
         imgs.extend(y)
 
     print('exec time: {0:.2f}[s]'.format(time.time() - st))
@@ -104,11 +107,8 @@ def predict(model, args, org, ch, rate, val=-1):
     # 生成された画像は入力画像の2倍の大きさになっているので縮小する
     h = 0.5
     half_size = (int(img.shape[1] * h), int(img.shape[0] * h))
-    flg = cv2.INTER_NEAREST
     img = cv2.resize(img, half_size, flg)
     img = img[:org_size[0], :org_size[1]]
-    resize = (int(img.shape[1] * rate), int(img.shape[0] * rate))
-    img = cv2.resize(img, resize, flg)
 
     # 生成結果を保存する
     if(val >= 0):
@@ -162,16 +162,16 @@ def checkModelType(path):
 
 def main(args):
     # jsonファイルから学習モデルのパラメータを取得する
-    net, unit, ch, layer, sr, af1, af2 = getModelParam(args.param)
+    net, unit, ch, size, layer, sr, af1, af2 = getModelParam(args.param)
     # 学習モデルの出力画像のチャンネルに応じて画像を読み込む
     ch_flg = IMG.getCh(ch)
     org_imgs = [cv2.imread(name, ch_flg)
                 for name in args.jpeg if isImage(name)]
     # 学習モデルを生成する
     if net == 0:
-        from Lib.network2 import JC_UDUD as JC
-    else:
         from Lib.network import JC_DDUU as JC
+    else:
+        from Lib.network2 import JC_UDUD as JC
 
     model = L.Classifier(
         JC(n_unit=unit, n_out=ch, layer=layer,
@@ -195,7 +195,7 @@ def main(args):
 
     # 学習モデルを入力画像ごとに実行する
     with chainer.using_config('train', False):
-        imgs = [predict(model, args, img, ch, args.img_rate, i)
+        imgs = [predict(model, args, img, ch, size, args.img_rate, i)
                 for i, img in enumerate(org_imgs)]
 
     # 推論実行結果を表示する
