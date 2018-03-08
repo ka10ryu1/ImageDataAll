@@ -54,12 +54,14 @@ class JPGMonitor(ChangeHandler):
     def on_modified(self, event):
         path, name, ext = super().on_modified(event)
         if('jpg' in ext.lower()):
+            print(path, name, ext)
             time.sleep(1)
             # 学習モデルを入力画像ごとに実行する
             with chainer.using_config('train', False):
-                img = cv2.imread(path)
+                img = cv2.imread(path, IMG.getCh(1))
                 img = predict(self.model, IMG.split([img], self.size),
                               self.batch, img.shape, self.gpu)
+                cv2.imwrite(os.path.join(self.copy, name), img)
 
 
 def run(model, size, batch, gpu, monitor, copy):
@@ -79,16 +81,15 @@ def run(model, size, batch, gpu, monitor, copy):
 
 def main(args):
     # jsonファイルから学習モデルのパラメータを取得する
-    net, unit, ch, layer, sr, af1, af2 = IMG.getModelParam(args.param)
+    net, unit, ch, size, layer, sr, af1, af2 = IMG.getModelParam(args.param)
     # 学習モデルを生成する
     if net == 0:
-        from Lib.network2 import JC_UDUD as JC
-    else:
         from Lib.network import JC_DDUU as JC
+    else:
+        from Lib.network2 import JC_UDUD as JC
 
     model = L.Classifier(
-        JC(n_unit=unit, n_out=ch, layer=layer,
-           rate=sr, actfun_1=af1, actfun_2=af2)
+        JC(n_unit=unit, n_out=ch, rate=sr, actfun_1=af1, actfun_2=af2)
     )
     # load_npzのpath情報を取得する
     load_path = F.checkModelType(args.model)
@@ -106,14 +107,14 @@ def main(args):
         chainer.cuda.get_device_from_id(args.gpu).use()
         model.to_gpu()
 
-    run(model, args.size, args.batch, args.gpu, args.monitor, args.copy)
+    print('Monitoring :', args.monitor)
+    print('Copy to :', args.copy)
+    print('Exit: Ctrl-c')
+    run(model, size, args.batch, args.gpu, args.monitor, args.copy)
 
 
 if __name__ == '__main__':
     args = command()
-    print('Monitoring :', args.monitor)
-    print('Copy to :', args.copy)
-    print('Exit: Ctrl-c')
 
     if not os.path.isdir(args.monitor):
         print('[Error] monitor folder not found:', args.monitor)
