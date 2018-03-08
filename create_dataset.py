@@ -20,6 +20,8 @@ def command():
                         help='生成される画像サイズ（default: 32 pixel）')
     parser.add_argument('--round', '-r', type=int, default=100,
                         help='切り捨てる数（default: 100）')
+    parser.add_argument('--augmentation', '-a', type=int, default=2,
+                        help='水増しの種類（default: 2）')
     # parser.add_argument('--channel', '-c', type=int, default=1,
     #                     help='入力画像のチャンネル数（default: 1）')
     parser.add_argument('--train_per_all', '-t', type=float, default=0.9,
@@ -42,8 +44,18 @@ def main(args):
     # 正解のモノクロ画像を読み込む
     y = cv2.imread(args.duotone, IMG.getCh(1))
 
-    x, _ = IMG.split(IMG.rotate([x]), args.img_size, args.round)
-    y, _ = IMG.split(IMG.rotate([y]), args.img_size, args.round)
+    if x is None:
+        print('[ERROR] color image not found:', args.color)
+        exit()
+
+    if y is None:
+        print('[ERROR] duotone image not found:', args.duotone)
+        exit()
+
+    x, _ = IMG.split(IMG.rotate([x], args.augmentation),
+                     args.img_size, args.round)
+    y, _ = IMG.split(IMG.rotate([y], args.augmentation),
+                     args.img_size, args.round)
 
     # 画像の並び順をシャッフルするための配列を作成する
     # colorとmonoの対応を崩さないようにシャッフルしなければならない
