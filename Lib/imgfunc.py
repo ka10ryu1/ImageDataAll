@@ -7,6 +7,7 @@ help = '画像処理に関する便利機能'
 import os
 import sys
 import cv2
+import json
 import numpy as np
 
 try:
@@ -36,6 +37,22 @@ def getCh(ch):
         return cv2.IMREAD_UNCHANGED
 
 
+def isImage(name):
+    """
+    入力されたパスが画像か判定する
+    [in]  name: 画像か判定したいパス
+    [out] 画像ならTrue
+    """
+
+    # cv2.imreadしてNoneが返ってきたら画像でないとする
+    if cv2.imread(name) is not None:
+        return True
+    else:
+        print('[{0}] is not Image'.format(name))
+        print(F.fileFuncLine())
+        return False
+
+
 def encodeDecode(in_imgs, ch, quality=5):
     """
     入力された画像リストを圧縮する
@@ -62,7 +79,7 @@ def encodeDecode(in_imgs, ch, quality=5):
     return out_imgs
 
 
-def split(imgs, size, round_num=-1, flg=cv2.BORDER_REPLICATE):
+def split(imgs: list, size: int, round_num=-1, flg=cv2.BORDER_REPLICATE):
     """
     入力された画像リストを正方形に分割する
     imgsに格納されている画像はサイズが同じであること
@@ -76,16 +93,17 @@ def split(imgs, size, round_num=-1, flg=cv2.BORDER_REPLICATE):
     imgs = [cv2.copyMakeBorder(img, 0, size, 0, size, flg)
             for img in imgs]
     # 画像を分割しやすいように画像サイズを変更する
-    v_size = imgs[0].shape[0] // size * size
-    h_size = imgs[0].shape[1] // size * size
-    imgs = [i[:v_size, :h_size] for i in imgs]
+    v_size = [img.shape[0] // size * size for img in imgs]
+    h_size = [img.shape[1] // size * size for img in imgs]
+    imgs = [i[:v, :h] for i, v, h in zip(imgs, v_size, h_size)]
     # 画像の分割数を計算する
-    v_split = imgs[0].shape[0] // size
-    h_split = imgs[0].shape[1] // size
+    v_split = [img.shape[0] // size for img in imgs]
+    h_split = [img.shape[1] // size for img in imgs]
     # 画像を分割する
     out_imgs = []
-    [[out_imgs.extend(np.vsplit(h_img, v_split))
-      for h_img in np.hsplit(img, h_split)] for img in imgs]
+    [[out_imgs.extend(np.vsplit(hi, v))
+      for hi in np.hsplit(i, h)]
+     for i, h, v in zip(imgs, h_split, v_split)]
 
     # 切り捨てたい数よりも画像数が少ないと0枚になってしまうので注意
     if(round_num > len(out_imgs)):
@@ -98,9 +116,9 @@ def split(imgs, size, round_num=-1, flg=cv2.BORDER_REPLICATE):
     # predict.pyなどで分割画像を復元したくなるので縦横の分割数も返す
     if(round_num > 0):
         round_len = len(out_imgs) // round_num * round_num
-        return np.array(out_imgs[:round_len]), (v_split, h_split)
+        return np.array(out_imgs[:round_len]), (v_split[0], h_split[0])
     else:
-        return np.array(out_imgs), (v_split, h_split)
+        return np.array(out_imgs), (v_split[0], h_split[0])
 
 
 def rotate(imgs, num=2):
@@ -121,7 +139,7 @@ def rotate(imgs, num=2):
     return out_imgs
 
 
-def whiteCheck(imgs, val=245):
+def whiteCheck(imgs: list, val=245):
     """
     画像リストのうち、ほとんど白い画像を除去する
     [in] imgs: 判定する画像リスト
@@ -287,3 +305,34 @@ def getOptimizer(opt_str):
 
     print('Optimizer:', opt.__doc__.split('.')[0])
     return opt
+
+
+def getModelParam(path):
+    """
+    jsonで記述されたモデルパラメータ情報を読み込む
+    [in]  path:        jsonファイルのパス
+    [out] d['unut']:   中間層のユニット数
+    [out] d['img_ch']: 画像のチャンネル数
+    [out] d['layer']:  ネットワーク層の数
+    [out] af1:         活性化関数(1)
+    [out] af2:         活性化関数(2)
+    """
+
+    print('model param:', path)
+    try:
+        with open(path, 'r') as f:
+            d = json.load(f)
+
+    except:
+        import traceback
+        traceback.print_exc()
+        print(F.fileFuncLine())
+        exit()
+
+    af1 = getActfun(d['actfun_1'])
+    af2 = getActfun(d['actfun_2'])
+    ch = d['shape'][0]
+    size = d['shape'][1]
+    return \
+        d['network'], d['unit'], ch, size, \
+        d['layer_num'], d['shuffle_rate'], af1, af2
