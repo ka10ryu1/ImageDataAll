@@ -25,8 +25,8 @@ def command():
                         help='使用するモデルパラメータ')
     parser.add_argument('jpeg', nargs='+',
                         help='使用する画像のパス')
-    parser.add_argument('--quality', '-q', type=int, default=5,
-                        help='画像の圧縮率 [default: 5]')
+    parser.add_argument('--img_rate', '-r', type=float, default=1,
+                        help='画像サイズの倍率 [default: 1]')
     parser.add_argument('--batch', '-b', type=int, default=100,
                         help='ミニバッチサイズ [default: 100]')
     parser.add_argument('--gpu', '-g', type=int, default=-1,
@@ -101,11 +101,20 @@ def main(args):
 
     # 学習モデルを入力画像ごとに実行する
     ch_flg = IMG.getCh(ch)
-    org_imgs = [cv2.imread(name, ch_flg) for name in args.jpeg if IMG.isImage(name)]
+
+    def resize(img, rate, flg=cv2.INTER_NEAREST):
+        size = (int(img.shape[1] * rate),
+                int(img.shape[0] * rate))
+        return cv2.resize(img, size, flg)
+
+    org_imgs = [resize(cv2.imread(name, ch_flg), args.img_rate)
+                for name in args.jpeg if IMG.isImage(name)]
+
     imgs = []
     with chainer.using_config('train', False):
         for i, ei in enumerate(org_imgs):
-            img = predict(model, IMG.split([ei], size), args.batch, ei.shape, args.gpu)
+            img = predict(model, IMG.split(
+                [ei], size), args.batch, ei.shape, args.gpu)
             # 生成結果を保存する
             name = F.getFilePath(args.out_path, 'comp-' +
                                  str(i * 10 + 1).zfill(3), '.jpg')
