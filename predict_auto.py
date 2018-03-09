@@ -40,6 +40,8 @@ def command():
                         help='GPU ID [default -1]')
     parser.add_argument('--out_path', '-o', default='./result/',
                         help='生成物の保存先[default: ./result/]')
+    parser.add_argument('--force', action='store_true',
+                        help='monotorとcopyのフォルダがない場合に強制的に作成する')
     return parser.parse_args()
 
 
@@ -117,10 +119,17 @@ if __name__ == '__main__':
     args = command()
 
     if not os.path.isdir(args.monitor):
-        print('[Error] monitor folder not found:', args.monitor)
-        exit()
+        if args.force:
+            os.makedirs(args.monitor)
+        else:
+            print('[Error] monitor folder not found:', args.monitor)
+            exit()
 
     if not os.path.isdir(args.copy):
-        print('[Error] copy folder not found:', args.copy)
-        exit()
+        if args.force:
+            os.makedirs(args.copy)
+        else:
+            print('[Error] copy folder not found:', args.copy)
+            exit()
+
     main(args)
