@@ -47,6 +47,7 @@ def predict(model, data, batch, org_shape, gpu):
     [out] img:       推論実行で得られた生成画像
     """
 
+    # dataには圧縮画像と分割情報が含まれているので、分離する
     comp, size = data
     imgs = []
     st = time.time()
@@ -57,18 +58,14 @@ def predict(model, data, batch, org_shape, gpu):
         imgs.extend(IMG.arr2imgs(to_cpu(y.array)))
 
     print('exec time: {0:.2f}[s]'.format(time.time() - st))
-    # 生成された画像を結合する
+    # 生成された画像を分割情報をもとに結合する
     buf = [np.vstack(imgs[i * size[0]: (i + 1) * size[0]])
            for i in range(size[1])]
     img = np.hstack(buf)
-    # 生成された画像は入力画像の2倍の大きさになっているので縮小する
-    h = 0.5
-    half_size = (int(img.shape[1] * h), int(img.shape[0] * h))
-    flg = cv2.INTER_NEAREST
-    img = cv2.resize(img, half_size, flg)
-    img = img[:org_shape[0], :org_shape[1]]
-
-    return img
+    # 出力画像は入力画像の2倍の大きさになっているので半分に縮小する
+    img = IMG.resize(img, 0.5)
+    # 結合しただけでは画像サイズがオリジナルと異なるので切り取る
+    return img[:org_shape[0], :org_shape[1]]
 
 
 def main(args):
@@ -101,20 +98,15 @@ def main(args):
 
     # 学習モデルを入力画像ごとに実行する
     ch_flg = IMG.getCh(ch)
-
-    def resize(img, rate, flg=cv2.INTER_NEAREST):
-        size = (int(img.shape[1] * rate),
-                int(img.shape[0] * rate))
-        return cv2.resize(img, size, flg)
-
-    org_imgs = [resize(cv2.imread(name, ch_flg), args.img_rate)
+    org_imgs = [IMG.resize(cv2.imread(name, ch_flg), args.img_rate)
                 for name in args.jpeg if IMG.isImage(name)]
 
     imgs = []
     with chainer.using_config('train', False):
         for i, ei in enumerate(org_imgs):
-            img = predict(model, IMG.split(
-                [ei], size), args.batch, ei.shape, args.gpu)
+            img = predict(
+                model, IMG.split([ei], size), args.batch, ei.shape, args.gpu
+            )
             # 生成結果を保存する
             name = F.getFilePath(args.out_path, 'comp-' +
                                  str(i * 10 + 1).zfill(3), '.jpg')
