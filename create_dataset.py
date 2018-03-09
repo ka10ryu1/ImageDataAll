@@ -32,6 +32,14 @@ def command():
 
 
 def saveNPZ(x, y, name, folder, size):
+    """
+    入力データと正解データをNPZ形式で保存する
+    [in] x:      保存する入力データ
+    [in] y:      保存する正解データ
+    [in] name:   保存する名前
+    [in] folder: 保存するフォルダ
+    [in] size:   データ（正方形画像）のサイズ
+    """
     size_str = '_' + str(size).zfill(2) + 'x' + str(size).zfill(2)
     num_str = '_' + str(x.shape[0]).zfill(6)
     np.savez(F.getFilePath(folder, name + size_str + num_str), x=x, y=y)
@@ -40,18 +48,22 @@ def saveNPZ(x, y, name, folder, size):
 def main(args):
 
     # 入力のカラー画像を読み込む
-    x = cv2.imread(args.color, IMG.getCh(3))
-    # 正解のモノクロ画像を読み込む
-    y = cv2.imread(args.duotone, IMG.getCh(1))
-
-    if x is None:
+    if IMG.isImage(args.color):
+        print('color image read:\t', args.color)
+        x = cv2.imread(args.color, IMG.getCh(3))
+    else:
         print('[ERROR] color image not found:', args.color)
         exit()
 
-    if y is None:
+    # 正解のモノクロ画像を読み込む
+    if IMG.isImage(args.duotone):
+        print('duotone image read:\t', args.duotone)
+        y = cv2.imread(args.duotone, IMG.getCh(1))
+    else:
         print('[ERROR] duotone image not found:', args.duotone)
         exit()
 
+    print('split and rotate images...')
     x, _ = IMG.split(IMG.rotate([x], args.augmentation),
                      args.img_size, args.round)
     y, _ = IMG.split(IMG.rotate([y], args.augmentation),
@@ -64,10 +76,11 @@ def main(args):
     shuffle = np.random.permutation(range(len(x)))
     train_size = int(len(x) * args.train_per_all)
     print(train_size, len(x))  # , x.shape)
-    train_x = IMG.imgs2arr(x[shuffle[:train_size]], dtype=np.float16)
-    train_y = IMG.imgs2arr(y[shuffle[:train_size]], dtype=np.float16)
-    test_x = IMG.imgs2arr(x[shuffle[train_size:]], dtype=np.float16)
-    test_y = IMG.imgs2arr(y[shuffle[train_size:]], dtype=np.float16)
+    dtype = np.float16
+    train_x = IMG.imgs2arr(x[shuffle[:train_size]], dtype=dtype)
+    train_y = IMG.imgs2arr(y[shuffle[:train_size]], dtype=dtype)
+    test_x = IMG.imgs2arr(x[shuffle[train_size:]], dtype=dtype)
+    test_y = IMG.imgs2arr(y[shuffle[train_size:]], dtype=dtype)
     print('train x/y:{0}/{1}'.format(train_x.shape, train_y.shape))
     print('test  x/y:{0}/{1}'.format(test_x.shape, test_y.shape))
 
