@@ -79,13 +79,14 @@ def encodeDecode(in_imgs, ch, quality=5):
     return out_imgs
 
 
-def split(imgs: list, size: int, round_num=-1, flg=cv2.BORDER_REPLICATE):
+def split(imgs, size, round_num=-1, flg=cv2.BORDER_REPLICATE):
     """
     入力された画像リストを正方形に分割する
     imgsに格納されている画像はサイズが同じであること
     [in]  imgs:      入力画像リスト
     [in]  size:      正方形のサイズ（size x size）
     [in]  round_num: 丸める画像数
+    [in]  flg:       境界線のフラグ
     [out] 分割されたnp.array形式の正方形画像リスト
     """
 
@@ -125,21 +126,26 @@ def rotate(imgs, num=2):
     """
     画像を回転させてデータ数を水増しする
     [in]  imgs:     入力画像リスト
-    [out] out_imgs: 出力画像リスト（4倍）
+    [in]  num:      水増しする数（最大4倍）
+    [out] out_imgs: 出力画像リスト
     """
 
+    # ベース
     out_imgs = imgs.copy()
+    # 上下反転を追加
     [out_imgs.append(cv2.flip(i, 0)) for i in imgs]
     if(num > 1):
+        # 左右反転を追加
         [out_imgs.append(cv2.flip(i, 1)) for i in imgs]
 
     if(num > 2):
+        # 上下左右反転を追加
         [out_imgs.append(cv2.flip(cv2.flip(i, 1), 0)) for i in imgs]
 
     return out_imgs
 
 
-def whiteCheck(imgs: list, val=245):
+def whiteCheck(imgs, val=245):
     """
     画像リストのうち、ほとんど白い画像を除去する
     [in] imgs: 判定する画像リスト
@@ -151,6 +157,20 @@ def whiteCheck(imgs: list, val=245):
             if(val > np.sum(i) // (i.shape[0] * i.shape[1]))]
 
 
+def resize(img, rate, flg=cv2.INTER_NEAREST):
+    """
+    画像サイズを変更する
+    [in] img:  N倍にする画像
+    [in] rate: 倍率
+    [in] flg:  N倍にする時のフラグ
+    [out] N倍にされた画像リスト
+    """
+
+    size = (int(img.shape[1] * rate),
+            int(img.shape[0] * rate))
+    return cv2.resize(img, size, flg)
+
+
 def size2x(imgs, flg=cv2.INTER_NEAREST):
     """
     画像のサイズを2倍にする
@@ -159,16 +179,14 @@ def size2x(imgs, flg=cv2.INTER_NEAREST):
     [out] 2倍にされた画像リスト
     """
 
-    w, h = imgs[0].shape[:2]
-    size = (w * 2, h * 2)
-    return [cv2.resize(i, size, flg) for i in imgs]
+    return [resize(i, 2, flg) for i in imgs]
 
 
 def arr2x(arr, flg=cv2.INTER_NEAREST):
     """
     行列を画像に変換し、サイズを2倍にする
     [in] arr: 2倍にする行列
-    [in] flg:  2倍にする時のフラグ
+    [in] flg: 2倍にする時のフラグ
     [out] 2倍にされた行列
     """
 
@@ -202,8 +220,6 @@ def arr2imgs(arr, norm=255, dtype=np.uint8):
     """
     Chainerの出力をOpenCVで可視化するために変換する
     [in]  arr:   Chainerから出力された行列
-    [in]  ch:    画像に変換する際のチャンネル数
-    [in]  size:  画像に変換する際の画像サイズ
     [in]  norm:  正規化をもとに戻す数（255であれば、0-1を0-255に変換する）
     [in]  dtype: 変換するデータタイプ
     [out] OpenCV形式の画像に変換された行列
@@ -310,12 +326,15 @@ def getOptimizer(opt_str):
 def getModelParam(path):
     """
     jsonで記述されたモデルパラメータ情報を読み込む
-    [in]  path:        jsonファイルのパス
-    [out] d['unut']:   中間層のユニット数
-    [out] d['img_ch']: 画像のチャンネル数
-    [out] d['layer']:  ネットワーク層の数
-    [out] af1:         活性化関数(1)
-    [out] af2:         活性化関数(2)
+    [in]  path:              jsonファイルのパス
+    [out] d['network']:      ネットワークの種類
+    [out] d['unut']:         中間層のユニット数
+    [out] ch:                画像のチャンネル数
+    [out] size:              画像の分割サイズ
+    [out] d['layer_num']:    ネットワーク層の数
+    [out] d['shuffle_rate']: PSのshuffle rate
+    [out] af1:               活性化関数(1)
+    [out] af2:               活性化関数(2)
     """
 
     print('model param:', path)
